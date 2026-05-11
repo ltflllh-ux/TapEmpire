@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Collectible, RARITY_COLORS } from "../../data/collections";
 import { formatTL } from "../../utils/formatTL";
 import { useGameStore } from "../../store/useGameStore";
-import * as Haptics from "expo-haptics";
+import { soundManager } from "../../engine/SoundManager";
 
 interface Props {
   item: Collectible;
@@ -22,7 +22,7 @@ export default function CollectionCard({ item }: Props) {
   const handleBuy = () => {
     if (locked || owned || !canAfford) return;
     buyCollectible(item.id);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    soundManager.playPurchase();
   };
 
   if (locked) {

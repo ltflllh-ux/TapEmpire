@@ -11,12 +11,15 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useGameStore } from "../store/useGameStore";
+import { supabase } from "../lib/supabase";
+import { cloudSave } from "../hooks/useSupabase";
 import { formatTL } from "../utils/formatTL";
 import { INVESTMENTS } from "../data/investments";
 import { BUSINESSES } from "../data/businesses";
 import { COLLECTIBLES } from "../data/collections";
 import SectionCard from "../components/profile/SectionCard";
 import StatRow from "../components/profile/StatRow";
+import { soundManager } from "../engine/SoundManager";
 
 export default function ProfileScreen() {
   const store = useGameStore();
@@ -57,7 +60,7 @@ export default function ProfileScreen() {
   const handlePrestige = () => {
     if (!canPrestige) return;
     const newMult = (1 + (store.prestigeLevel + 1) * 0.25).toFixed(2);
-    const doPrestige = () => store.prestige();
+    const doPrestige = () => { store.prestige(); soundManager.playPrestige(); };
     if (Platform.OS === "web") {
       if (window.confirm(`Prestige yapacaksın! Tüm ilerleme sıfırlanacak ama kalıcı ${newMult}x çarpan kazanacaksın. Emin misin?`)) doPrestige();
     } else {
@@ -175,13 +178,45 @@ export default function ProfileScreen() {
         </SectionCard>
 
         <SectionCard title={"⚙️ Oyun Ayarları"}>
+          <TouchableOpacity
+            style={styles.cloudSaveBtn}
+            onPress={async () => {
+              await cloudSave();
+              if (Platform.OS === "web") {
+                window.alert("Oyun buluta kaydedildi!");
+              } else {
+                Alert.alert("Başarılı", "Oyun buluta kaydedildi!");
+              }
+            }}
+          >
+            <Text style={styles.cloudSaveBtnText}>{"☁️ Buluta Kaydet"}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
             <Text style={styles.resetBtnText}>{"🗑️ Oyunu Sıfırla"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={() => {
+              const doLogout = async () => {
+                await cloudSave();
+                await supabase.auth.signOut();
+              };
+              if (Platform.OS === "web") {
+                if (window.confirm("Çıkış yapmak istediğine emin misin? İlerlemen kaydedilecek.")) doLogout();
+              } else {
+                Alert.alert("Çıkış Yap", "İlerlemen kaydedilecek. Emin misin?", [
+                  { text: "İptal", style: "cancel" },
+                  { text: "Çıkış", onPress: doLogout },
+                ]);
+              }
+            }}
+          >
+            <Text style={styles.logoutBtnText}>{"🚪 Çıkış Yap"}</Text>
           </TouchableOpacity>
         </SectionCard>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>TapEmpire v2.0</Text>
+          <Text style={styles.footerText}>TapEmpire v3.0</Text>
         </View>
       </ScrollView>
     </View>
@@ -213,8 +248,12 @@ const styles = StyleSheet.create({
   prestigeBtnDisabled: { borderColor: "#2D3748" },
   prestigeBtnText: { color: "#F4C430", fontSize: 15, fontWeight: "bold" },
   prestigeBtnTextDisabled: { color: "#4A5568" },
-  resetBtn: { backgroundColor: "#2D1B1B", borderWidth: 1.5, borderColor: "#FC8181", borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  cloudSaveBtn: { backgroundColor: "#1A2744", borderWidth: 1.5, borderColor: "#63B3ED", borderRadius: 10, paddingVertical: 12, alignItems: "center", marginBottom: 10 },
+  cloudSaveBtnText: { color: "#63B3ED", fontSize: 14, fontWeight: "bold" },
+  resetBtn: { backgroundColor: "#2D1B1B", borderWidth: 1.5, borderColor: "#FC8181", borderRadius: 10, paddingVertical: 12, alignItems: "center", marginBottom: 10 },
   resetBtnText: { color: "#FC8181", fontSize: 14, fontWeight: "bold" },
+  logoutBtn: { backgroundColor: "#1A2744", borderWidth: 1.5, borderColor: "#A0AEC0", borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  logoutBtnText: { color: "#A0AEC0", fontSize: 14, fontWeight: "bold" },
   footer: { alignItems: "center", marginTop: 12, paddingBottom: 10 },
   footerText: { color: "#2D3748", fontSize: 12 },
 });

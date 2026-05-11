@@ -5,6 +5,7 @@ import { useGameStore } from "../store/useGameStore";
 import { SHOP_ITEMS, SHOP_CATEGORIES, ShopItem } from "../data/shopItems";
 import { formatTL } from "../utils/formatTL";
 import CategoryBar from "../components/shared/CategoryBar";
+import { soundManager } from "../engine/SoundManager";
 
 function ShopCard({ item, onBuy }: { item: ShopItem; onBuy: (id: string) => void }) {
   return (
@@ -54,6 +55,7 @@ export default function ShopScreen() {
     if (!item) return;
     const confirm = () => {
       purchaseShopItem(id);
+      soundManager.playPurchase();
     };
     if (Platform.OS === "web") {
       if (window.confirm(`${item.name} satın almak istiyor musun? (${item.price} — Demo mod)`)) {

@@ -1,10 +1,11 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Business, getBusinessUpgradeCost, getBusinessIncome } from "../../data/businesses";
+import { MANAGERS, RARITY_COLORS } from "../../data/managers";
 import { formatTL } from "../../utils/formatTL";
 import { useGameStore } from "../../store/useGameStore";
 import TimerCountdown from "../shared/TimerCountdown";
-import * as Haptics from "expo-haptics";
+import { soundManager } from "../../engine/SoundManager";
 
 interface Props {
   business: Business;
@@ -19,6 +20,10 @@ export default function BusinessCard({ business }: Props) {
   const isVip = useGameStore((s) => s.isVip);
   const diamonds = useGameStore((s) => s.diamonds);
   const skipTimer = useGameStore((s) => s.skipTimer);
+  const assignedManagerId = useGameStore((s) => s.assignedManagers[business.id]);
+  const assignedManager = assignedManagerId
+    ? MANAGERS.find((m) => m.id === assignedManagerId)
+    : null;
 
   const locked = tapLevel < business.unlockTapLevel;
   const isMaxLevel = level >= business.maxLevel;
@@ -31,7 +36,7 @@ export default function BusinessCard({ business }: Props) {
   const handleUpgrade = () => {
     if (locked || isMaxLevel || !canAfford || hasTimer) return;
     upgradeBusiness(business.id);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    soundManager.playPurchase();
   };
 
   const handleSkip = () => {
@@ -70,6 +75,14 @@ export default function BusinessCard({ business }: Props) {
             </View>
           </View>
           <Text style={styles.desc}>{business.description}</Text>
+          {assignedManager && (
+            <View style={[styles.managerBadge, { borderColor: RARITY_COLORS[assignedManager.rarity] }]}>
+              <Text style={styles.managerBadgeIcon}>{assignedManager.icon}</Text>
+              <Text style={[styles.managerBadgeText, { color: RARITY_COLORS[assignedManager.rarity] }]}>
+                {assignedManager.name}
+              </Text>
+            </View>
+          )}
           {level > 0 && (
             <Text style={[styles.income, hasTimer && styles.pendingIncome]}>
               {hasTimer ? "⏳ " : "⚡ "}{formatTL(incomePerHour)}/saat
@@ -251,5 +264,24 @@ const styles = StyleSheet.create({
     color: "#F4C430",
     fontSize: 14,
     fontWeight: "bold",
+  },
+  managerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A2744",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 4,
+    alignSelf: "flex-start",
+    gap: 4,
+  },
+  managerBadgeIcon: {
+    fontSize: 12,
+  },
+  managerBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
 });

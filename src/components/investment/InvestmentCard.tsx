@@ -4,7 +4,7 @@ import { Investment, getInvestmentCost } from "../../data/investments";
 import { formatTL } from "../../utils/formatTL";
 import { useGameStore } from "../../store/useGameStore";
 import TimerCountdown from "../shared/TimerCountdown";
-import * as Haptics from "expo-haptics";
+import { soundManager } from "../../engine/SoundManager";
 
 interface Props {
   investment: Investment;
@@ -28,7 +28,7 @@ export default function InvestmentCard({ investment }: Props) {
   const handleBuy = () => {
     if (locked || !canAfford || hasTimer) return;
     buyInvestment(investment.id);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    soundManager.playPurchase();
   };
 
   const handleSkip = () => {

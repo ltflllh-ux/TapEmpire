@@ -5,8 +5,10 @@ import { BUSINESSES, getBusinessUpgradeCost, calcTotalBusinessIncome } from "../
 import { COLLECTIBLES, calcCollectibleBoosts } from "../data/collections";
 import { ACHIEVEMENTS } from "../data/achievements";
 import { SHOP_ITEMS } from "../data/shopItems";
+import { MANAGERS } from "../data/managers";
 import { getTimerDuration } from "../data/timerConfig";
 import { saveGame, loadGame } from "../utils/saveLoad";
+import { getActiveQuests } from "../data/quests";
 
 function calcPassiveWithTimers(
   inv: Record<string, number>,
@@ -89,6 +91,20 @@ interface GameState {
   isVip: boolean;
   vipEndTime: number;
 
+  // Managers
+  ownedManagers: string[];
+  assignedManagers: Record<string, string>;
+
+  // Quest tracking
+  questProgress: Record<string, number>;
+  claimedQuests: string[];
+  lastQuestResetDate: string;
+  lastWeeklyResetDate: string;
+
+  // Wheel
+  lastWheelSpinDate: string;
+  wheelSpinsToday: number;
+
   // Actions
   tap: (comboMult?: number) => void;
   buyInvestment: (id: string) => void;
@@ -115,6 +131,15 @@ interface GameState {
   getTimerRemaining: (type: "business" | "investment", id: string) => number;
   purchaseShopItem: (id: string) => boolean;
   checkVipExpiry: () => void;
+  hireManager: (managerId: string) => void;
+  assignManager: (managerId: string, businessId: string) => void;
+  unassignManager: (managerId: string) => void;
+  getBusinessManagerBonus: (businessId: string) => { speedMult: number; incomeMult: number; costReduction: number };
+  updateQuestProgress: (key: string, amount: number) => void;
+  claimQuestReward: (questId: string) => void;
+  checkQuestReset: () => void;
+  canSpinFree: () => boolean;
+  recordWheelSpin: () => void;
   resetGame: () => void;
   saveToStorage: () => void;
   loadFromStorage: () => Promise<void>;
@@ -169,6 +194,17 @@ export const useGameStore = create<GameState>((set, get) => ({
   isVip: false,
   vipEndTime: 0,
 
+  questProgress: {},
+  claimedQuests: [],
+  lastQuestResetDate: "",
+  lastWeeklyResetDate: "",
+
+  ownedManagers: [],
+  assignedManagers: {},
+
+  lastWheelSpinDate: "",
+  wheelSpinsToday: 0,
+
   tap: (comboMult?: number) => {
     const {
       tapValue, boostActive, boostMultiplier,
@@ -185,6 +221,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       taxDebt: s.taxDebt + earning * 0.08,
     }));
     get().checkLevelUp();
+    get().updateQuestProgress("totalTaps", 1);
+    get().updateQuestProgress("totalEarned", earning);
   },
 
   activateBoost: () => {
@@ -193,6 +231,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       boostMultiplier: 25,
       boostEndTime: Date.now() + 30_000,
     });
+    get().updateQuestProgress("boostsUsed", 1);
   },
 
   checkBoostExpiry: () => {
@@ -259,6 +298,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         ),
       });
     }
+    get().updateQuestProgress("investmentsBought", 1);
   },
 
   upgradeBusiness: (id: string) => {
@@ -297,6 +337,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         ),
       });
     }
+    get().updateQuestProgress("businessesUpgraded", 1);
   },
 
   buyCollectible: (id: string) => {
@@ -319,6 +360,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         boosts.passiveBoost, s.prestigeMultiplier, vipMult,
       ),
     });
+    get().updateQuestProgress("collectiblesBought", 1);
   },
 
   setPlayerInfo: (name: string, company: string) => {
@@ -339,6 +381,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       taxDebt: s.taxDebt - payment,
       taxPaid: s.taxPaid + payment,
     }));
+    get().updateQuestProgress("taxPaid", 1);
   },
 
   claimDailyReward: (amount: number) => {
@@ -604,6 +647,157 @@ export const useGameStore = create<GameState>((set, get) => ({
     return earned;
   },
 
+  hireManager: (managerId: string) => {
+    const s = get();
+    const manager = MANAGERS.find((m) => m.id === managerId);
+    if (!manager) return;
+    if (s.ownedManagers.includes(managerId)) return;
+    if (s.diamonds < manager.cost) return;
+    set({
+      diamonds: s.diamonds - manager.cost,
+      ownedManagers: [...s.ownedManagers, managerId],
+    });
+    get().saveToStorage();
+  },
+
+  assignManager: (managerId: string, businessId: string) => {
+    const s = get();
+    if (!s.ownedManagers.includes(managerId)) return;
+    const alreadyAssigned = Object.values(s.assignedManagers).includes(managerId);
+    if (alreadyAssigned) return;
+    set({
+      assignedManagers: { ...s.assignedManagers, [businessId]: managerId },
+    });
+    get().saveToStorage();
+  },
+
+  unassignManager: (managerId: string) => {
+    const s = get();
+    const newAssigned = { ...s.assignedManagers };
+    for (const [bizId, mgrId] of Object.entries(newAssigned)) {
+      if (mgrId === managerId) {
+        delete newAssigned[bizId];
+        break;
+      }
+    }
+    set({ assignedManagers: newAssigned });
+    get().saveToStorage();
+  },
+
+  getBusinessManagerBonus: (businessId: string) => {
+    const s = get();
+    const managerId = s.assignedManagers[businessId];
+    if (!managerId) return { speedMult: 1, incomeMult: 1, costReduction: 0 };
+    const manager = MANAGERS.find((m) => m.id === managerId);
+    if (!manager) return { speedMult: 1, incomeMult: 1, costReduction: 0 };
+    let speedMult = 1;
+    let incomeMult = 1;
+    let costReduction = 0;
+    switch (manager.ability.type) {
+      case "speed":
+        speedMult = 1 + manager.ability.value / 100;
+        break;
+      case "multiplier":
+        incomeMult = manager.ability.value;
+        break;
+      case "costReduction":
+        costReduction = manager.ability.value;
+        break;
+      case "combined":
+        incomeMult = manager.ability.value;
+        costReduction = manager.ability.secondaryValue ?? 0;
+        break;
+    }
+    return { speedMult, incomeMult, costReduction };
+  },
+
+  updateQuestProgress: (key: string, amount: number) => {
+    const s = get();
+    const daySeed = new Date().getFullYear() * 10000 + new Date().getMonth() * 100 + new Date().getDate();
+    const activeQuests = getActiveQuests(daySeed);
+    const matching = activeQuests.filter((q) => q.trackingKey === key);
+    if (matching.length === 0) return;
+    const newProgress = { ...s.questProgress };
+    for (const q of matching) {
+      if (s.claimedQuests.includes(q.id)) continue;
+      newProgress[q.id] = (newProgress[q.id] || 0) + amount;
+    }
+    set({ questProgress: newProgress });
+  },
+
+  claimQuestReward: (questId: string) => {
+    const s = get();
+    if (s.claimedQuests.includes(questId)) return;
+    const daySeed = new Date().getFullYear() * 10000 + new Date().getMonth() * 100 + new Date().getDate();
+    const activeQuests = getActiveQuests(daySeed);
+    const quest = activeQuests.find((q) => q.id === questId);
+    if (!quest) return;
+    const progress = s.questProgress[questId] || 0;
+    if (progress < quest.target) return;
+    const updates: Partial<GameState> = { claimedQuests: [...s.claimedQuests, questId] };
+    if (quest.reward.type === "coins") {
+      updates.balance = s.balance + quest.reward.amount;
+      updates.totalEarned = s.totalEarned + quest.reward.amount;
+      updates.lifetimeEarned = s.lifetimeEarned + quest.reward.amount;
+    } else {
+      updates.diamonds = s.diamonds + quest.reward.amount;
+    }
+    set(updates);
+    get().saveToStorage();
+  },
+
+  checkQuestReset: () => {
+    const s = get();
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const jan1 = new Date(now.getFullYear(), 0, 1);
+    const dayOfYear = Math.floor((now.getTime() - jan1.getTime()) / 86400000) + 1;
+    const weekKey = `${now.getFullYear()}-W${Math.ceil(dayOfYear / 7)}`;
+    let needsUpdate = false;
+    const updates: Partial<GameState> = {};
+    if (s.lastQuestResetDate !== today) {
+      const daySeed = now.getFullYear() * 10000 + now.getMonth() * 100 + now.getDate();
+      const activeQuests = getActiveQuests(daySeed);
+      const dailyIds = activeQuests.filter((q) => q.type === "daily").map((q) => q.id);
+      const newProgress = { ...s.questProgress };
+      for (const id of dailyIds) { newProgress[id] = 0; }
+      updates.questProgress = newProgress;
+      updates.claimedQuests = s.claimedQuests.filter((cid) => !dailyIds.includes(cid) && !cid.startsWith("daily_"));
+      updates.lastQuestResetDate = today;
+      needsUpdate = true;
+    }
+    if (s.lastWeeklyResetDate !== weekKey) {
+      const daySeed = now.getFullYear() * 10000 + now.getMonth() * 100 + now.getDate();
+      const activeQuests = getActiveQuests(daySeed);
+      const weeklyIds = activeQuests.filter((q) => q.type === "weekly").map((q) => q.id);
+      const ep = updates.questProgress || { ...s.questProgress };
+      for (const wid of weeklyIds) { ep[wid] = 0; }
+      updates.questProgress = ep;
+      const ec = updates.claimedQuests || [...s.claimedQuests];
+      updates.claimedQuests = ec.filter((cid) => !weeklyIds.includes(cid) && !cid.startsWith("weekly_"));
+      updates.lastWeeklyResetDate = weekKey;
+      needsUpdate = true;
+    }
+    if (needsUpdate) { set(updates); get().saveToStorage(); }
+  },
+
+  canSpinFree: () => {
+    const { lastWheelSpinDate, wheelSpinsToday } = get();
+    const today = new Date().toISOString().split("T")[0];
+    if (lastWheelSpinDate !== today) return true;
+    return wheelSpinsToday < 1;
+  },
+
+  recordWheelSpin: () => {
+    const today = new Date().toISOString().split("T")[0];
+    const { lastWheelSpinDate } = get();
+    if (lastWheelSpinDate !== today) {
+      set({ lastWheelSpinDate: today, wheelSpinsToday: 1 });
+    } else {
+      set((s) => ({ wheelSpinsToday: s.wheelSpinsToday + 1, lastWheelSpinDate: today }));
+    }
+  },
+
   resetGame: () => {
     set({
       balance: 0,
@@ -637,6 +831,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       diamonds: 0,
       isVip: false,
       vipEndTime: 0,
+      ownedManagers: [],
+      assignedManagers: {},
+      questProgress: {},
+      claimedQuests: [],
+      lastQuestResetDate: "",
+      lastWeeklyResetDate: "",
+      lastWheelSpinDate: "",
+      wheelSpinsToday: 0,
       activeEventId: null,
       eventEndTime: 0,
       eventTapMult: 1,
@@ -675,6 +877,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       diamonds: s.diamonds,
       isVip: s.isVip,
       vipEndTime: s.vipEndTime,
+      ownedManagers: s.ownedManagers,
+      assignedManagers: s.assignedManagers,
+      questProgress: s.questProgress,
+      claimedQuests: s.claimedQuests,
+      lastQuestResetDate: s.lastQuestResetDate,
+      lastWeeklyResetDate: s.lastWeeklyResetDate,
+      lastWheelSpinDate: s.lastWheelSpinDate,
+      wheelSpinsToday: s.wheelSpinsToday,
     });
   },
 
@@ -739,6 +949,14 @@ export const useGameStore = create<GameState>((set, get) => ({
         diamonds: (d.diamonds as number) ?? 0,
         isVip: isStillVip,
         vipEndTime: isStillVip ? vipEnd : 0,
+        ownedManagers: (d.ownedManagers as string[]) ?? [],
+        assignedManagers: (d.assignedManagers as Record<string, string>) ?? {},
+        questProgress: (d.questProgress as Record<string, number>) ?? {},
+        claimedQuests: (d.claimedQuests as string[]) ?? [],
+        lastQuestResetDate: (d.lastQuestResetDate as string) ?? "",
+        lastWeeklyResetDate: (d.lastWeeklyResetDate as string) ?? "",
+        lastWheelSpinDate: (d.lastWheelSpinDate as string) ?? "",
+        wheelSpinsToday: (d.wheelSpinsToday as number) ?? 0,
         activeEventId: null,
         eventEndTime: 0,
         eventTapMult: 1,

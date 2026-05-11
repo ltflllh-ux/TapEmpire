@@ -11,9 +11,11 @@ import DailyRewardModal from "../components/shared/DailyRewardModal";
 import LevelProgress from "../components/tap/LevelProgress";
 import TapButton from "../components/tap/TapButton";
 import FloatingMoney from "../components/tap/FloatingMoney";
+import CoinBurst from "../components/tap/CoinBurst";
 import TapParticle from "../components/tap/TapParticles";
 import ComboIndicator from "../components/tap/ComboIndicator";
 import BoostSection from "../components/tap/BoostSection";
+import ParallaxBackground from "../components/shared/ParallaxBackground";
 import { usePassiveIncome } from "../hooks/usePassiveIncome";
 import { useRandomEvents } from "../hooks/useRandomEvents";
 import { useCombo } from "../hooks/useCombo";
@@ -35,6 +37,12 @@ interface Particle {
   y: number;
 }
 
+interface CoinBurstData {
+  id: number;
+  x: number;
+  y: number;
+}
+
 interface ToastData {
   id: string;
   name: string;
@@ -45,6 +53,7 @@ interface ToastData {
 
 let floaterId = 0;
 let particleId = 0;
+let coinBurstId = 0;
 
 export default function HomeScreen() {
   const tap = useGameStore((s) => s.tap);
@@ -64,6 +73,7 @@ export default function HomeScreen() {
   const dailyStreak = useGameStore((s) => s.dailyStreak);
 
   const [floaters, setFloaters] = useState<Floater[]>([]);
+  const [coinBursts, setCoinBursts] = useState<CoinBurstData[]>([]);
   const [particles, setParticles] = useState<Particle[]>([]);
   const [offlineEarnings, setOfflineEarnings] = useState(0);
   const [showOffline, setShowOffline] = useState(false);
@@ -139,6 +149,9 @@ export default function HomeScreen() {
     const fId = ++floaterId;
     setFloaters((prev) => [...prev, { id: fId, x, y, amount }]);
 
+    const cbId = ++coinBurstId;
+    setCoinBursts((prev) => [...prev, { id: cbId, x: cx - 12, y: 70 }]);
+
     for (let i = 0; i < 3; i++) {
       const pId = ++particleId;
       const px = cx - 20 + Math.random() * 40;
@@ -148,8 +161,9 @@ export default function HomeScreen() {
 
     registerTap();
     soundManager.playTap();
+    if (combo === 14 || combo === 29 || combo === 49) soundManager.playCombo();
     tap(comboMultiplier);
-  }, [tap, tapValue, boostActive, boostMultiplier, collectibleTapBoost, prestigeMultiplier, eventTapMult, comboMultiplier, registerTap]);
+  }, [tap, tapValue, boostActive, boostMultiplier, collectibleTapBoost, prestigeMultiplier, eventTapMult, comboMultiplier, combo, registerTap]);
 
   const removeFloater = useCallback((id: number) => {
     setFloaters((prev) => prev.filter((f) => f.id !== id));
@@ -159,14 +173,19 @@ export default function HomeScreen() {
     setParticles((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  const removeCoinBurst = useCallback((id: number) => {
+    setCoinBursts((prev) => prev.filter((cb) => cb.id !== id));
+  }, []);
+
   const handleClaimDaily = useCallback((amount: number) => {
     claimDailyReward(amount);
-    soundManager.playPurchase();
+    soundManager.playDailyReward();
     setShowDailyReward(false);
   }, [claimDailyReward]);
 
   return (
     <LinearGradient colors={["#070D1A", "#0A1628", "#070D1A"]} style={styles.container}>
+      <ParallaxBackground />
       <StatusBar barStyle="light-content" backgroundColor="#070D1A" />
 
       {toast && (
@@ -220,6 +239,15 @@ export default function HomeScreen() {
             x={f.x}
             y={f.y}
             onDone={() => removeFloater(f.id)}
+          />
+        ))}
+        {coinBursts.map((cb) => (
+          <CoinBurst
+            key={cb.id}
+            id={cb.id}
+            x={cb.x}
+            y={cb.y}
+            onDone={() => removeCoinBurst(cb.id)}
           />
         ))}
         {particles.map((p) => (

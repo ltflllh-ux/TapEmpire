@@ -7,6 +7,9 @@ interface Props {
 }
 
 const MENU_ITEMS = [
+  { key: "Quest", icon: "📜", label: "Görevler", desc: "Günlük ve haftalık görevler" },
+  { key: "Wheel", icon: "🎰", label: "Şans Çarkı", desc: "Günlük ücretsiz çevir, ödüller kazan" },
+  { key: "Manager", icon: "👔", label: "Yöneticiler", desc: "İşletmelerine manager ata" },
   { key: "Collection", icon: "💎", label: "Koleksiyon", desc: "Nadir eşyalar ve bonuslar" },
   { key: "Achievement", icon: "🏆", label: "Başarımlar", desc: "Hedefler ve ödüller" },
   { key: "Profile", icon: "👤", label: "Profil & Ayarlar", desc: "İstatistikler, prestige, vergi" },

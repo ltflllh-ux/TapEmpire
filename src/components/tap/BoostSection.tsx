@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useGameStore } from "../../store/useGameStore";
+import { soundManager } from "../../engine/SoundManager";
 
 export default function BoostSection() {
   const boostActive = useGameStore((s) => s.boostActive);
@@ -33,7 +34,7 @@ export default function BoostSection() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.button} onPress={activateBoost}>
+      <TouchableOpacity style={styles.button} onPress={() => { activateBoost(); soundManager.playBoost(); }}>
         <Text style={styles.buttonText}>
           {"📺 Reklam İzle → 30sn boyunca 25x kazanç!"}
         </Text>
