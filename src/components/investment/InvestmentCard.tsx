@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Investment, getInvestmentCost } from "../../data/investments";
 import { formatTL } from "../../utils/formatTL";
 import { useGameStore } from "../../store/useGameStore";
+import TimerCountdown from "../shared/TimerCountdown";
 import * as Haptics from "expo-haptics";
 
 interface Props {
@@ -14,16 +15,27 @@ export default function InvestmentCard({ investment }: Props) {
   const tapLevel = useGameStore((s) => s.tapLevel);
   const owned = useGameStore((s) => s.ownedInvestments[investment.id] || 0);
   const buyInvestment = useGameStore((s) => s.buyInvestment);
+  const timerEnd = useGameStore((s) => s.investmentTimers[investment.id] || 0);
+  const isVip = useGameStore((s) => s.isVip);
+  const diamonds = useGameStore((s) => s.diamonds);
+  const skipTimer = useGameStore((s) => s.skipTimer);
 
   const locked = tapLevel < investment.unlockLevel;
   const cost = getInvestmentCost(investment, owned);
   const canAfford = balance >= cost;
+  const hasTimer = timerEnd > Date.now();
 
   const handleBuy = () => {
-    if (locked || !canAfford) return;
+    if (locked || !canAfford || hasTimer) return;
     buyInvestment(investment.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
+
+  const handleSkip = () => {
+    skipTimer("investment", investment.id);
+  };
+
+  const skipLabel = isVip ? "VIP Atla" : diamonds >= 5 ? `💎 5 Atla` : "💎 5 Gerekli";
 
   if (locked) {
     return (
@@ -57,23 +69,35 @@ export default function InvestmentCard({ investment }: Props) {
             )}
           </View>
           <Text style={styles.desc}>{investment.description}</Text>
-          <Text style={styles.income}>
-            {"⚡ "}{formatTL(investment.incomePerHour)}/saat
+          <Text style={[styles.income, hasTimer && styles.pendingIncome]}>
+            {hasTimer ? "⏳ " : "⚡ "}{formatTL(investment.incomePerHour)}/saat
+            {hasTimer && " (bekliyor)"}
           </Text>
         </View>
       </View>
-      <TouchableOpacity
-        style={[styles.buyBtn, !canAfford && styles.buyBtnDisabled]}
-        onPress={handleBuy}
-        disabled={!canAfford}
-      >
-        <Text style={[styles.buyText, !canAfford && styles.buyTextDisabled]}>
-          {formatTL(cost)}
-        </Text>
-        <Text style={[styles.buyLabel, !canAfford && styles.buyTextDisabled]}>
-          SATIN AL
-        </Text>
-      </TouchableOpacity>
+
+      {hasTimer && (
+        <TimerCountdown
+          endTime={timerEnd}
+          onSkip={handleSkip}
+          skipLabel={skipLabel}
+        />
+      )}
+
+      {!hasTimer && (
+        <TouchableOpacity
+          style={[styles.buyBtn, !canAfford && styles.buyBtnDisabled]}
+          onPress={handleBuy}
+          disabled={!canAfford}
+        >
+          <Text style={[styles.buyText, !canAfford && styles.buyTextDisabled]}>
+            {formatTL(cost)}
+          </Text>
+          <Text style={[styles.buyLabel, !canAfford && styles.buyTextDisabled]}>
+            SATIN AL
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -147,6 +171,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     marginTop: 4,
+  },
+  pendingIncome: {
+    color: "#F4C430",
   },
   buyBtn: {
     backgroundColor: "#1A2744",

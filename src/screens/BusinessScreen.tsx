@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useGameStore } from "../store/useGameStore";
 import { BUSINESSES } from "../data/businesses";
 import { formatTL } from "../utils/formatTL";
-import BusinessCategoryTabs from "../components/business/BusinessCategoryTabs";
+import CategoryBar from "../components/shared/CategoryBar";
+import { BUSINESS_CATEGORIES } from "../data/businesses";
 import BusinessCard from "../components/business/BusinessCard";
 
 export default function BusinessScreen() {
@@ -20,13 +22,13 @@ export default function BusinessScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <LinearGradient colors={["#0D1B2A", "#1A2744"]} style={styles.header}>
         <Text style={styles.title}>{"🏢 İşletmelerim"}</Text>
         <Text style={styles.income}>
           Toplam Gelir: {formatTL(hourlyPassiveIncome)}/saat
         </Text>
-      </View>
-      <BusinessCategoryTabs selected={category} onSelect={setCategory} />
+      </LinearGradient>
+      <CategoryBar categories={BUSINESS_CATEGORIES} selected={category} onSelect={setCategory} />
       <ScrollView contentContainerStyle={styles.list}>
         {filtered.map((biz) => (
           <BusinessCard key={biz.id} business={biz} />

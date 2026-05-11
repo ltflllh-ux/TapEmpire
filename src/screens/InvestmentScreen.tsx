@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useGameStore } from "../store/useGameStore";
 import { INVESTMENTS } from "../data/investments";
 import { formatTL } from "../utils/formatTL";
-import CategoryTabs from "../components/investment/CategoryTabs";
+import CategoryBar from "../components/shared/CategoryBar";
+import { INVESTMENT_CATEGORIES } from "../data/investments";
 import InvestmentCard from "../components/investment/InvestmentCard";
 
 export default function InvestmentScreen() {
@@ -20,13 +22,13 @@ export default function InvestmentScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <LinearGradient colors={["#0D1B2A", "#1A2744"]} style={styles.header}>
         <Text style={styles.title}>{"📈 Yatırımlarım"}</Text>
         <Text style={styles.income}>
           Pasif Gelir: {formatTL(hourlyPassiveIncome)}/saat
         </Text>
-      </View>
-      <CategoryTabs selected={category} onSelect={setCategory} />
+      </LinearGradient>
+      <CategoryBar categories={INVESTMENT_CATEGORIES} selected={category} onSelect={setCategory} />
       <ScrollView contentContainerStyle={styles.list}>
         {filtered.map((inv) => (
           <InvestmentCard key={inv.id} investment={inv} />

@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useGameStore } from "../store/useGameStore";
 import { COLLECTIBLES } from "../data/collections";
-import CollectionCategoryTabs from "../components/collection/CollectionCategoryTabs";
+import CategoryBar from "../components/shared/CategoryBar";
+import { COLLECTION_CATEGORIES } from "../data/collections";
 import CollectionCard from "../components/collection/CollectionCard";
 
 export default function CollectionScreen() {
@@ -25,7 +27,7 @@ export default function CollectionScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <LinearGradient colors={["#0D1B2A", "#1A2744"]} style={styles.header}>
         <Text style={styles.title}>{"💎 Koleksiyonum"}</Text>
         <Text style={styles.count}>
           {ownedCount} / {COLLECTIBLES.length} eşya
@@ -45,8 +47,8 @@ export default function CollectionScreen() {
             <Text style={styles.noBoost}>Henüz bonus yok</Text>
           )}
         </View>
-      </View>
-      <CollectionCategoryTabs selected={category} onSelect={setCategory} />
+      </LinearGradient>
+      <CategoryBar categories={COLLECTION_CATEGORIES} selected={category} onSelect={setCategory} />
       <ScrollView contentContainerStyle={styles.list}>
         {filtered.map((item) => (
           <CollectionCard key={item.id} item={item} />

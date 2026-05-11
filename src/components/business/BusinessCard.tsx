@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Business, getBusinessUpgradeCost, getBusinessIncome } from "../../data/businesses";
 import { formatTL } from "../../utils/formatTL";
 import { useGameStore } from "../../store/useGameStore";
+import TimerCountdown from "../shared/TimerCountdown";
 import * as Haptics from "expo-haptics";
 
 interface Props {
@@ -14,6 +15,10 @@ export default function BusinessCard({ business }: Props) {
   const tapLevel = useGameStore((s) => s.tapLevel);
   const level = useGameStore((s) => s.ownedBusinesses[business.id] || 0);
   const upgradeBusiness = useGameStore((s) => s.upgradeBusiness);
+  const timerEnd = useGameStore((s) => s.businessTimers[business.id] || 0);
+  const isVip = useGameStore((s) => s.isVip);
+  const diamonds = useGameStore((s) => s.diamonds);
+  const skipTimer = useGameStore((s) => s.skipTimer);
 
   const locked = tapLevel < business.unlockTapLevel;
   const isMaxLevel = level >= business.maxLevel;
@@ -21,12 +26,19 @@ export default function BusinessCard({ business }: Props) {
   const canAfford = balance >= cost;
   const incomePerSec = getBusinessIncome(business, level);
   const incomePerHour = incomePerSec * 3600;
+  const hasTimer = timerEnd > Date.now();
 
   const handleUpgrade = () => {
-    if (locked || isMaxLevel || !canAfford) return;
+    if (locked || isMaxLevel || !canAfford || hasTimer) return;
     upgradeBusiness(business.id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
+
+  const handleSkip = () => {
+    skipTimer("business", business.id);
+  };
+
+  const skipLabel = isVip ? "VIP Atla" : diamonds >= 5 ? `💎 5 Atla` : "💎 5 Gerekli";
 
   if (locked) {
     return (
@@ -59,8 +71,9 @@ export default function BusinessCard({ business }: Props) {
           </View>
           <Text style={styles.desc}>{business.description}</Text>
           {level > 0 && (
-            <Text style={styles.income}>
-              {"⚡ "}{formatTL(incomePerHour)}/saat
+            <Text style={[styles.income, hasTimer && styles.pendingIncome]}>
+              {hasTimer ? "⏳ " : "⚡ "}{formatTL(incomePerHour)}/saat
+              {hasTimer && " (bekliyor)"}
             </Text>
           )}
         </View>
@@ -80,20 +93,30 @@ export default function BusinessCard({ business }: Props) {
         </Text>
       </View>
 
-      {isMaxLevel ? (
-        <View style={styles.maxBtn}>
-          <Text style={styles.maxText}>{"MAX SEVİYE 🏆"}</Text>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={[styles.upgradeBtn, !canAfford && styles.upgradeBtnDisabled]}
-          onPress={handleUpgrade}
-          disabled={!canAfford}
-        >
-          <Text style={[styles.upgradeText, !canAfford && styles.upgradeTextDisabled]}>
-            {level === 0 ? "SATIN AL" : "YÜKSELT"} — {formatTL(cost)}
-          </Text>
-        </TouchableOpacity>
+      {hasTimer && (
+        <TimerCountdown
+          endTime={timerEnd}
+          onSkip={handleSkip}
+          skipLabel={skipLabel}
+        />
+      )}
+
+      {!hasTimer && (
+        isMaxLevel ? (
+          <View style={styles.maxBtn}>
+            <Text style={styles.maxText}>{"MAX SEVİYE 🏆"}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.upgradeBtn, !canAfford && styles.upgradeBtnDisabled]}
+            onPress={handleUpgrade}
+            disabled={!canAfford}
+          >
+            <Text style={[styles.upgradeText, !canAfford && styles.upgradeTextDisabled]}>
+              {level === 0 ? "SATIN AL" : "YÜKSELT"} — {formatTL(cost)}
+            </Text>
+          </TouchableOpacity>
+        )
       )}
     </View>
   );
@@ -168,6 +191,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     marginTop: 4,
+  },
+  pendingIncome: {
+    color: "#F4C430",
   },
   progressRow: {
     flexDirection: "row",
